@@ -3,19 +3,17 @@ name = "echo_rust_wrapper"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { version = "1", features = ["full"] } # Enables everything — runtime + all I/O utilities (recommended for full functionality)
-serde_json = "1.0"                            # For JSON parsing/logging
+tokio = { version = "1", features = ["full"] }
+serde_json = "1.0"
 reqwest = { version = "0.11", default-features = false, features = ["json", "blocking"] }
-                                          # Blocking version is now `reqwest::blocking` — keep non-blocking by default for better responsiveness
-dirs-next = "2"                               # Modern replacement for old 'dirs' crate (better maintenance)
-anyhow = "1"                                  # For easy error handling
-futures-util = "0.3"                          # Provides boxed() and other future utilities
-serde = { version = "1.0", features = ["derive"] } # If you want serialization/deserialization in the future
-
+dirs-next = "2"
+anyhow = "1"
+futures-util = "0.3"
+serde = { version = "1.0", features = ["derive"] }
 lazy_static = "1.4"
 once_cell = "1.21.4"
 uuid = "1.23.1"
 rusqlite = { version = "0.31", features = ["bundled"] }
+chrono = "0.4.44"
