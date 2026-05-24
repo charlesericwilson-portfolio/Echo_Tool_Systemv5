@@ -9,6 +9,7 @@ use once_cell::sync::Lazy;
 use tokio::sync::Mutex;
 use std::collections::HashMap;
 use anyhow::Result as AnyhowResult;
+mod json;
 mod db;
 use db::ToolDatabase;
 
@@ -62,6 +63,19 @@ Once a session is created, continue using the same SESSION:NAME command for foll
 
 Use COMMAND: command for simple one-off commands.
 Use SESSION:NAME command when you need a persistent or interactive session (like msfconsole) or want a summary.
+For date and time use this json function
+JSON_TOOL:
+{
+  "tool_calls": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_current_datetime",
+        "arguments": "{}"
+      }
+    }
+  ]
+}
 "#;
 
 pub static ACTIVE_SESSIONS: Lazy<Mutex<HashMap<String, (String, String)>>> = Lazy::new(|| Mutex::new(HashMap::new()));
@@ -203,7 +217,25 @@ async fn main() -> AnyhowResult<()> {
         let mut current_response = response_text;
 
         loop {
-            if let Some((session_name, command)) = extract_session_command(&current_response) {
+             if let Some(json_content) = extract_json_tool(&current_response) {
+                println!("{}Echo: Detected JSON tool call{}", LIGHT_BLUE, RESET_COLOR);
+                println!("{}Echo: {}", LIGHT_BLUE, current_response.trim());
+                save_chat_log_entry(&home_dir, trimmed_input, &current_response, "assistant").await.unwrap();
+                messages.push(json!({"role": "assistant", "content": current_response.clone()}));
+
+                match handle_json_tool_call_str(&json_content).await {
+                    Ok(result) => {
+                        let tool_content = format!("Tool output:\n{}", result);
+                        save_chat_log_entry(&home_dir, trimmed_input, &tool_content, "assistant").await.unwrap();
+                        messages.push(json!({"role": "tool", "content": tool_content}));
+                    }
+                    Err(e) => {
+                        let error_msg = format!("JSON Tool error: {}", e);
+                        messages.push(json!({"role": "tool", "content": error_msg}));
+                    }
+                }
+
+          } else if let Some((session_name, command)) = extract_session_command(&current_response) {
                 println!("{}Echo: {}", LIGHT_BLUE, current_response.trim());
                 save_chat_log_entry(&home_dir, trimmed_input, &current_response, "assistant").await.unwrap();
                 messages.push(json!({"role": "assistant", "content": current_response.clone()}));
@@ -465,5 +497,6 @@ mod safety;
 
 use sessions::{start_or_reuse_session, execute_in_session, end_session, clean_up_sessions};
 use log::save_chat_log_entry;
-use commands::{extract_session_command, extract_run_command, extract_end_command, extract_command};
+use commands::{extract_session_command, extract_run_command, extract_end_command, extract_command, extract_json_tool};
 use safety::is_command_safe;
+use json::handle_json_tool_call_str;
