@@ -19,86 +19,26 @@ pub const YELLOW: &str = "\x1b[33m";
 pub const RESET_COLOR: &str = "\x1b[0m";
 
 // Constants
-const MODEL_NAME: &str = "Echo";
-const API_URL: &str = "http://localhost:8080/v1/chat/completions";
-
-const SYSTEM_PROMPT: &str = r#"
-Start each chat with a simple greeting.
-You are Echo, Eric's local sidekick and autonomous red team operator.
-You keep going until the task is complete.
-You have two powerful tools:
-- Execute quick commands using: COMMAND: [full command here]
-- Execute persistent sessions using: SESSION:NAME [full command here] any additional commands just reuse SESSION:NAME [new commands]
-IMPORTANT RULES:
-- I am not running the tools you are.
-- DO NOT USE mark down ** COMMAND: ** at all
-- You can run ANY command the user has permission to execute.
-- For large outputs, feel free to redirect to files (>, >>) and tell me the filename.
-- You have 2 Echo memory files to use across sessions. ~/Documents/Echo_short_term_memory.txt is for the job we are on in case of session failure. ~/Documents/Echo_long_term_memory.txt Is for things you learn that you want to permenantly keep across jobs and sessions. You can and should read them using the cat command just like any other tool after loading into the server.
-- You also have access to a database that contains all tool calls and summary in sqlite that you can use if you need to review.
-- Internet-related tasks: use ddgr, lynx, curl, wget, etc. when needed.
-
-Examples of good usage:
-User: "What's running on port 80 locally?"
-→ COMMAND: sudo netstat -tulnp | grep :80
-
-User: "Show me the last 20 lines of auth.log"
-→ COMMAND: sudo tail -n 20 /var/log/auth.log
-
-User: "Find all .env files in my home"
-→ COMMAND: find ~ -type f -name ".env" 2>/dev/null
-
-Stay sharp, efficient, and tool-first.
-
-=== Session Support ===
-You can also use persistent sessions with this exact format:
-  SESSION:NAME command here
-
-Examples:
-SESSION:msf msfconsole -q
-SESSION:shell whoami && pwd
-SESSION:recon nmap -sV 192.168.1.0/24
-
-Once a session is created, continue using the same SESSION:NAME command for follow-up commands in that session.
-
-Use COMMAND: command for simple one-off commands.
-Use SESSION:NAME command when you need a persistent or interactive session (like msfconsole) or want a summary.
-For date and time use this json function
-JSON_TOOL:
-{
-  "tool_calls": [
-    {
-      "type": "function",
-      "function": {
-        "name": "get_current_datetime",
-        "arguments": "{}"
-      }
-    }
-  ]
-}
-"#;
+//const MODEL_NAME: &str = "Echo";
+//const API_URL: &str = "http://localhost:8080/v1/chat/completions";
 
 pub static ACTIVE_SESSIONS: Lazy<Mutex<HashMap<String, (String, String)>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 pub static SHUTDOWN_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 pub static STOP_GENERATION: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+pub static CONFIG: Lazy<config::Config> = Lazy::new(|| {
+    config::load_config("config.toml").expect("Failed to load config.toml")
+});
 
 #[tokio::main]
 async fn main() -> AnyhowResult<()> {
     println!("Echo Rust Wrapper v2 – Async Tool Calls with Named Pipes");
     println!("Type 'quit' or 'exit' to stop.\n");
-
-    // Handle graceful shutdowns + generation interrupt
-    let mut termination = signal(SignalKind::terminate()).expect("Failed to set up SIGTERM handler");
-    let mut interrupt = signal(SignalKind::interrupt()).expect("Failed to set up SIGINT handler");
-    let mut quit = signal(SignalKind::quit()).expect("Failed to set up SIGQUIT handler");
+       // Handle graceful shutdowns + generation interrupt
+   let mut quit = signal(SignalKind::quit()).expect("Failed to set up SIGQUIT handler");
 
     tokio::spawn(async move {
-        loop {
-            tokio::select! {
-                _ = termination.recv() => { SHUTDOWN_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst); break; },
-                _ = interrupt.recv() => { SHUTDOWN_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst); break; },
-                _ = quit.recv() => { STOP_GENERATION.store(true, std::sync::atomic::Ordering::SeqCst); }
-            }
+    while quit.recv().await.is_some() {
+        STOP_GENERATION.store(true, std::sync::atomic::Ordering::SeqCst);
         }
     });
 
@@ -121,7 +61,11 @@ async fn main() -> AnyhowResult<()> {
         .await
         .expect("Failed to create Documents dir");
 
-    let full_system_prompt = format!("{}\n\n{}", SYSTEM_PROMPT.trim(), context_content.trim());
+    let main_prompt = tokio::fs::read_to_string(&CONFIG.prompts.main_system)
+    .await
+    .expect("Failed to read main system prompt");
+
+    let full_system_prompt = format!("{}\n\n{}", main_prompt.trim(), context_content.trim());
 
     let mut messages = vec![
         json!({"role": "system", "content": full_system_prompt}),
@@ -157,11 +101,11 @@ async fn main() -> AnyhowResult<()> {
             "content": trimmed_input,
         }));
 
-        let payload = json!({
-            "model": MODEL_NAME,
+       let payload = json!({
+            "model": CONFIG.endpoint.model,
             "messages": &messages,
-            "temperature": 0.7,
-            "max_tokens": 2048
+            "temperature": CONFIG.endpoint.temperature,
+            "max_tokens": CONFIG.endpoint.max_tokens
         });
 
         let response_text = tokio::select! {
@@ -181,7 +125,7 @@ async fn main() -> AnyhowResult<()> {
 
             result = async {
                 reqwest::Client::new()
-                    .post(API_URL)
+                    .post(&CONFIG.endpoint.url)
                     .header("Content-Type", "application/json")
                     .json(&payload)
                     .send()
@@ -205,7 +149,7 @@ async fn main() -> AnyhowResult<()> {
                     }
                     Err(e) => format!(
                         "Request to {} failed: {}. Is your local model server running?",
-                        API_URL, e
+                        CONFIG.endpoint.url, e
                     ),
                 }
             }
@@ -271,7 +215,7 @@ async fn main() -> AnyhowResult<()> {
 
                     messages.push(json!({
                         "role": "assistant",
-                        "content": current_response
+                        "content": format!("Executed command in session '{}'", session_name)
                     }));
 
                     messages.push(json!({
@@ -380,14 +324,14 @@ async fn main() -> AnyhowResult<()> {
 
             // Call model again after tool result
             let payload = json!({
-                "model": MODEL_NAME,
+                "model": CONFIG.endpoint.model,
                 "messages": &messages,
                 "temperature": 0.7,
                 "max_tokens": 2048
             });
 
             let next = reqwest::Client::new()
-                .post(API_URL)
+                .post(&CONFIG.endpoint.url)
                 .json(&payload)
                 .send()
                 .await?
@@ -412,14 +356,14 @@ async fn summarize_context(messages: &mut Vec<Value>) -> anyhow::Result<()> {
     let _summary_prompt = "Summarize the entire conversation so far in a concise way. Keep key facts, decisions, and important details. Output ONLY the summary, nothing else.";
 
     let payload = json!({
-        "model": MODEL_NAME,
+        "model": &CONFIG.endpoint.model,
         "messages": messages.clone(),
         "temperature": 0.3,
         "max_tokens": 5000
     });
 
     let response = reqwest::Client::new()
-        .post(API_URL)
+        .post(&CONFIG.endpoint.url)
         .json(&payload)
         .send()
         .await?
@@ -446,12 +390,16 @@ async fn summarize_context(messages: &mut Vec<Value>) -> anyhow::Result<()> {
 }
 
 async fn summarize_output(raw_output: &str) -> AnyhowResult<String> {
+    let summarizer_prompt = tokio::fs::read_to_string(&CONFIG.prompts.summarizer)
+        .await
+        .expect("Failed to read summarizer prompt");
+
     let payload = json!({
         "model": "summarizer",
         "messages": [
             {
                 "role": "system",
-                "content": "You are a precise summarizer. Extract ONLY key facts (IPs, open ports, services, names, findings)."
+                "content": summarizer_prompt
             },
             {
                 "role": "user",
@@ -463,7 +411,7 @@ async fn summarize_output(raw_output: &str) -> AnyhowResult<String> {
     });
 
     let response = match reqwest::Client::new()
-        .post("http://localhost:8082/v1/chat/completions")
+        .post(&CONFIG.summarizer.url)
         .header("Content-Type", "application/json")
         .json(&payload)
         .send()
@@ -494,6 +442,7 @@ mod sessions;
 mod log;
 mod commands;
 mod safety;
+mod config;
 
 use sessions::{start_or_reuse_session, execute_in_session, end_session, clean_up_sessions};
 use log::save_chat_log_entry;
