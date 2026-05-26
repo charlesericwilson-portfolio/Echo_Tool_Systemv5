@@ -1,41 +1,12 @@
 ## Feedback Welcome
 This project is still evolving. If you clone it, try it, or have ideas on how to improve it, **please** leave feedback or suggestions. Even small thoughts help a lot.
 
-# Echo_rust_agent_proxy
-Continuation of [Echo tmux agentv3](https://github.com/charlesericwilson-portfolio/Echo_tmux_agentv3) and adds proxy tool calls, output summarization, and database support.
-```mermaid
-flowchart TD
-    A[User sends prompt] --> B[LLM / Echo]
-    B --> C[LLM generates reply]
-    C --> D[Tool Extractor checks for session:NAME or COMMAND:]
-   
-    D -->|Session command found| E[Session Manager]
-    E --> F[Auto-create or reuse tmux session]
-    F --> G[Send command to tmux session]
-    G --> H[Session Manager starts polling tmux pane]
-    H --> I[Wait for new output + markers]
-    I --> J[Capture only new output between markers]
-    J --> K[Update Database with clean output]
-    K --> L[Send tool result back to LLM as 'tool' message]
-   
-    D -->|No session command| M[Execute as normal COMMAND:]
-    M --> O[Save COMMAND result to Database]
-    O --> N[Send tool result back to LLM as 'tool' message]
-   
-    L --> B
-    N --> B
-   
-    style A fill:#4ade80,stroke:#166534
-    style B fill:#60a5fa,stroke:#1e40af
-    style E fill:#facc15,stroke:#854d0e
-    style K fill:#c084fc,stroke:#6b21a8
-    style O fill:#c084fc,stroke:#6b21a8
-```
-## Echo Rust Wrapper v5 (In Testing)
+# Echo_Tool_System
+Continuation of [Echo tmux agentv3](https://github.com/charlesericwilson-portfolio/Echo_tmux_agentv3) and adds proxy tool calls, output summarization, and database support. If your model can tell you what to type it can use any CLI tool installed with this framework. Easy to build just follow the instructions at the end and fill in the config.tom and your set. The JSON support requires some knowledge to define your tools but the logic is there. The raw text methods are ready to go. I have included a basic syatem prompt that instructs the model the tool format but you can make it your own.
 
 **Current Version:** Rust v5 (Python proxy was v4)
 
-This is the active development version of **Echo** — a lightweight, local LLM agent wrapper written in Rust.
+This is the active development version of **Echo project** — a lightweight, local LLM agent wrapper written in Rust.
 The goal is to keep the **framework flexible** so the model’s capabilities are the main limitation — not artificial restrictions in the code.
 
 ## Current Status (May 2026)
@@ -107,4 +78,33 @@ Persistent sessions with complex tools (full msfconsole workflows) are still bei
   cargo build --release
   ./target/release/echo_rust_wrapper
   ```
+ 4. Edit the config.toml file with endpoints, deny commands, and system prompt paths.
+```mermaid
+flowchart TD
+    A[User sends prompt] --> B[LLM / Echo]
+    B --> C[LLM generates reply]
+    C --> D[Tool Extractor checks for session:NAME or COMMAND:]
+   
+    D -->|Session command found| E[Session Manager]
+    E --> F[Auto-create or reuse tmux session]
+    F --> G[Send command to tmux session]
+    G --> H[Session Manager starts polling tmux pane]
+    H --> I[Wait for new output + markers]
+    I --> J[Capture only new output between markers]
+    J --> K[Update Database with clean output]
+    K --> L[Send tool result back to LLM as 'tool' message]
+   
+    D -->|No session command| M[Execute as normal COMMAND:]
+    M --> O[Save COMMAND result to Database]
+    O --> N[Send tool result back to LLM as 'tool' message]
+   
+    L --> B
+    N --> B
+   
+    style A fill:#4ade80,stroke:#166534
+    style B fill:#60a5fa,stroke:#1e40af
+    style E fill:#facc15,stroke:#854d0e
+    style K fill:#c084fc,stroke:#6b21a8
+    style O fill:#c084fc,stroke:#6b21a8
+```
 Next steps: Building datasets and adding database support. Finetuning the base model check it out [Echo_training_project](https://github.com/charlesericwilson-portfolio/Echo_training_project)
