@@ -24,7 +24,7 @@ pub fn extract_run_command(response_text: &str) -> Option<(String, String)> {
             let rest = rest.trim();
             if let Some(session_name) = rest.split_whitespace().next() {
                 let command = rest.replacen(session_name, "", 1).trim().to_string();
-                return Some((session_name.to_string(), format!("run {}", command)));
+                return Some((session_name.to_string(), command));
             }
         }
     }
