@@ -7,6 +7,14 @@ max_tokens = 2048
 [summarizer]
 url = "http://localhost:8082/v1/chat/completions"
 
+[search]
+url = "http://localhost:8081/search"
+
+[paths]
+home_dir = ""
+context_file = "/home/eric/echo/Echo_rag/Echo-context.txt"
+database = "echo_tools.db"
+
 [prompts]
 main_system = "/home/eric/prompts/main_system.txt"
 summarizer = "/home/eric/prompts/summarizer.txt"
