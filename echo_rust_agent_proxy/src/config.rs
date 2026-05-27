@@ -10,6 +10,21 @@ pub struct EndpointConfig {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct PathsConfig {
+    pub home_dir: Option<String>,
+    pub context_file: String,
+    pub database: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct WebSearchConfig {
+    pub url: String,
+    #[serde(default)]
+    #[allow(dead_code)]
+    pub api_key: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct SummarizerConfig {
     pub url: String,
 }
@@ -37,6 +52,8 @@ pub struct Config {
     pub prompts: PromptsConfig,
     pub security: SecurityConfig,
     pub context: ContextConfig,
+    pub paths: PathsConfig,
+    pub web_search: Option<WebSearchConfig>,
 }
 
 pub fn load_config(path: &str) -> Result<Config, Box<dyn std::error::Error>> {
