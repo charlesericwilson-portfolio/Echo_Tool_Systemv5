@@ -12,7 +12,7 @@
 //! - `JSON_TOOL:`     → structured tool calls (see json.rs)
 //! - `SESSION:`       → persistent tmux session commands (see sessions.rs)
 //! - `END_SESSION:`   → terminate a tmux session
-//! - `COMMAND:`       → one-shot command execution (see commands.rs)
+//! - `command:`       → one-shot command execution (see commands.rs)
 //!
 //! After a tool runs, we append the result (as a "tool" role message) and loop
 //! back to the model. This enables autonomous multi-step tool use.
@@ -175,7 +175,7 @@ impl EchoAgent {
     /// The loop works like this:
     /// 1. Send current message history to the LLM.
     /// 2. Get a response.
-    /// 3. Check if the response contains a tool call (JSON_TOOL, SESSION, END_SESSION, COMMAND).
+    /// 3. Check if the response contains a tool call (JSON_TOOL, SESSION, END_SESSION, command).
     /// 4. If yes → execute the tool, append the result as a "tool" message, and loop.
     /// 5. If no  → this is the final answer. Optionally summarize context, then return.
     ///
@@ -212,27 +212,73 @@ impl EchoAgent {
                 .to_string();
 
             // === Check for tool calls FIRST, before pushing anything to history ===
+                        // === Check for tool calls FIRST, before pushing anything to history ===
             if let Some(command) = extract_command(&response_text) {
-                // Push neutral placeholder instead of the raw COMMAND: line
-                self.messages.push(json!({"role": "assistant", "content": "command executed"}));
+                // Only strip the command tag block, keep everything else the model said
+                let cleaned = response_text
+                    .replace(&format!("<command>{}</command>", command), "")
+                    .replace(&format!("command: {}", command), "")
+                    .trim()
+                    .to_string();
+
+                self.messages.push(json!({"role": "assistant", "content": cleaned}));
+                if !cleaned.trim().is_empty() {
+                    println!("{}Echo:\n{}\n{}", LIGHT_BLUE, cleaned.trim(), RESET_COLOR);
+                }
                 crate::commands::handle_command(self, user_input, &command).await?;
                 continue;
 
             } else if let Some((session_name, command)) = extract_session_command(&response_text) {
-                self.messages.push(json!({"role": "assistant", "content": "command executed"}));
+                let cleaned = response_text
+                    .replace(&format!("<session name=\"{}\">{}</session>", session_name, command), "")
+                    .trim()
+                    .to_string();
+
+                self.messages.push(json!({"role": "assistant", "content": cleaned}));
+                if !cleaned.trim().is_empty() {
+                    println!("{}Echo:\n{}\n{}", LIGHT_BLUE, cleaned.trim(), RESET_COLOR);
+                }
                 crate::sessions::handle_session_command(self, user_input, &session_name, Some(&command)).await?;
                 continue;
 
             } else if let Some(session_name) = extract_end_command(&response_text) {
-                self.messages.push(json!({"role": "assistant", "content": "command executed"}));
+                // Strip the END_SESSION: flag before appending reasoning/context
+                let cleaned = response_text
+                    .lines()
+                    .filter(|line| !line.trim_start().to_uppercase().starts_with("END_SESSION:"))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+                    .trim()
+                    .to_string();
+
+                self.messages.push(json!({"role": "assistant", "content": cleaned}));
+                if !cleaned.trim().is_empty() {
+                    println!("{}Echo:\n{}\n{}", LIGHT_BLUE, cleaned.trim(), RESET_COLOR);
+                }
                 crate::sessions::handle_session_command(self, user_input, &session_name, None).await?;
                 continue;
 
             } else if let Some(json_content) = extract_json_tool(&response_text) {
-                self.messages.push(json!({"role": "assistant", "content": "json tool executed"}));
+                // Remove the entire <json>...</json> block, keep reasoning
+                let cleaned = if let Some(start) = response_text.find("<json>") {
+                    if let Some(end) = response_text[start..].find("</json>") {
+                        let full_block_end = start + end + 7; // length of "</json>"
+                        let before = &response_text[..start];
+                        let after = &response_text[full_block_end..];
+                        format!("{}{}", before, after).trim().to_string()
+                    } else {
+                        response_text.to_string()
+                    }
+                } else {
+                    response_text.to_string()
+                };
+
+                self.messages.push(json!({"role": "assistant", "content": cleaned}));
+                if !cleaned.trim().is_empty() {
+                    println!("{}Echo:\n{}\n{}", LIGHT_BLUE, cleaned.trim(), RESET_COLOR);
+                }
                 crate::json::handle_json_tool(self, user_input, &response_text, &json_content).await?;
                 continue;
-
             } else {
                 // No tool flag found → this is the final answer
                 save_chat_log_entry(&self.home_dir, user_input, &response_text, "assistant").await?;

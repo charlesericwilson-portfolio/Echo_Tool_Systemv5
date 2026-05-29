@@ -75,37 +75,13 @@ pub async fn handle_json_tool(
     Ok(())
 }
 
-/// Extracts JSON tool call content after "JSON_TOOL:" flag
+/// Extracts JSON tool call content from <json>...</json> tags
 pub fn extract_json_tool(response: &str) -> Option<String> {
-    let marker = "JSON_TOOL:";
-
-    if let Some(start) = response.find(marker) {
-        let after_marker = &response[start + marker.len()..];
-        let trimmed = after_marker.trim_start();
-
-        if let Some(json_start) = trimmed.find('{') {
-            let json_section = &trimmed[json_start..];
-
-            let mut depth = 0;
-            let mut end_pos = 0;
-
-            for (i, c) in json_section.char_indices() {
-                if c == '{' {
-                    depth += 1;
-                } else if c == '}' {
-                    depth -= 1;
-                    if depth == 0 {
-                        end_pos = i + 1;
-                        break;
-                    }
-                }
-            }
-
-            if end_pos > 0 {
-                return Some(json_section[..end_pos].to_string());
-            }
+    if let Some(start) = response.find("<json>") {
+        if let Some(end) = response[start..].find("</json>") {
+            let inner = &response[start + 6..start + end];
+            return Some(inner.trim().to_string());
         }
     }
-
     None
 }

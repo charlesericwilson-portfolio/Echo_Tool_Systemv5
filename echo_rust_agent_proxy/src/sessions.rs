@@ -46,17 +46,23 @@ pub async fn start_or_reuse_session(
 }
     // Extraction logic
 pub fn extract_session_command(response_text: &str) -> Option<(String, String)> {
-    for line in response_text.lines() {
-        let line = line.trim();
-        if let Some(rest) = line.strip_prefix("SESSION:") {
-            let rest = rest.trim();
-            if let Some((session_name, command)) = rest.split_once(' ') {
-                return Some((
-                    session_name.trim().to_string(),
-                    command.trim().to_string(),
-                ));
-            } else if !rest.is_empty() {
-                return Some((rest.to_string(), String::new()));
+    // <session name="foo">command here</session>
+    if let Some(start) = response_text.find("<session name=\"") {
+        let after = &response_text[start + 15..]; // skip past <session name="
+
+        if let Some(name_end) = after.find('"') {
+            let session_name = after[..name_end].to_string();
+
+            if let Some(tag_close) = response_text[start..].find('>') {
+                let content_start = start + tag_close + 1;
+
+                if let Some(end) = response_text[content_start..].find("</session>") {
+                    let command = response_text[content_start..content_start + end]
+                        .trim()
+                        .to_string();
+
+                    return Some((session_name, command));
+                }
             }
         }
     }
@@ -205,11 +211,9 @@ pub async fn handle_session_command(
             agent.db.log_tool_call(session_name, cmd, &summary)?;
 
             let tool_content = format!("Tool output from SESSION '{}':\n{}", session_name, summary);
-            println!("{}[Tool Summary]:\n{}{}", crate::agent::YELLOW, summary, crate::agent::RESET_COLOR);
-            let tool_content_lower = tool_content.to_lowercase();
-            // Append as assistant message (lowercase to avoid re-trigger)
-            agent.messages.push(json!({"role": "assistant", "content": format!("Executed in session '{}'", session_name)}));
-            agent.messages.push(json!({"role": "tool", "content": tool_content_lower}));
+                println!("{}[Tool Summary]:\n{}{}", crate::agent::YELLOW, summary, crate::agent::RESET_COLOR);
+                agent.messages.push(json!({"role": "assistant", "content": format!("Executed in session '{}'", session_name)}));
+                agent.messages.push(json!({"role": "tool", "content": tool_content}));
         }
     } else {
         // END_SESSION case
