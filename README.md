@@ -110,6 +110,15 @@ The agent can fluidly switch between raw text commands, persistent tmux sessions
 - Auto summarization of context at 50K tokens.
 - Interrupt generation using ctl+\ end session using ctl+c.
 
+### Special considerations
+I changed the tokenizer chat template to accept user, assistant, system, and tool message types.
+The Problem with Standard Tool Result Handling
+Most OpenAI-compatible chat templates only define three message roles: system, user, and assistant. When an agent framework needs to return tool output back to the model, the only available slot is user — so tool results get injected as if the human typed them.
+This creates a fundamental semantic mismatch. The model was trained to treat user messages as new instructions requiring a response. So when it sees tool output injected as a user message, it reasons: a user gave me new information, I should act on it — and calls another tool. Which produces more output. Which gets injected as another user message. Which triggers another tool call. The loop never resolves because nothing in the token stream signals "this task is complete."
+The Solution
+By extending the tokenizer config to recognize a native tool role as a first-class message type, the model receives tool output in a semantically distinct slot it was trained to understand as feedback from its own actions, not as a new request from a user. It knows the wrapper executed the command on its behalf. It knows the output is the result of something it initiated. And it knows when the task is done because the feedback confirms completion rather than prompting further action.
+
+
 
 Persistent sessions with complex tools (full msfconsole workflows) are still being tuned. Context management and summarizer behavior continue to be refined. Database integration for all tool calls for auditing complete. Now supports Json function calling.
 
