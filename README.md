@@ -6,7 +6,7 @@ This is the active development version of the Echo project — a lightweight, lo
 It is a continuation of the earlier [Echo tmux agentv3](https://github.com/charlesericwilson-portfolio/Echo_tmux_agentv3) and adds support for proxy-style tool calls, output summarization, and database logging.
 Key idea: If your model can already tell you what commands to type and doesn't use a jinja template, it can use tools through this framework. No special fine-tuning is required.
 
-The raw text methods (COMMAND: and SESSION:NAME) are ready to use out of the box.
+The raw text methods are ready to use out of the box.
 JSON tool support is also available, though defining tools requires some setup.
 A basic system prompt is included to teach the model the tool format, but you can replace it with your own.
 
@@ -68,8 +68,8 @@ Echo works with **any server or API that speaks the OpenAI Chat Completions form
 
 ## Current Status (May 2026)
 
-- **Stable**: `COMMAND:` raw text tool execution
-- **Functional**: Persistent `SESSION:NAME` tool execution via tmux with smart output capture
+- **Stable**: `<command></command>` raw text tool execution
+- **Functional**: Persistent `<session name = NAME></session>` tool execution via tmux with smart output capture
 - **Stable** multi-line command and file writing support with xml tags <COMMAND>command here</COMMAND>. You can change the flag name in the code before compile right now but will eventually be going into config.toml
 - **New (In Progress)**: JSON tool calling support
 - Refactored to use config.toml to set endpoints and set your system prompts in text files for the main model and the summarizer model without recompiling.
@@ -82,7 +82,7 @@ The agent can fluidly switch between raw text commands, persistent tmux sessions
 
 ## Features
 
-- **Hybrid Tool Calling**: Supports both simple `COMMAND:` / `SESSION:NAME` syntax and modern JSON function calling
+- **Hybrid Tool Calling**: Supports both simple command syntax and modern JSON function calling
 - **Persistent Sessions**: Full tmux integration with named sessions and clean output capture
 - **Flexible Architecture**: Designed so users can add their own tools easily
 - **Local-First**: Works with local models (llama.cpp, Ollama, etc.)
@@ -98,9 +98,9 @@ The agent can fluidly switch between raw text commands, persistent tmux sessions
 - 
 ### What it does
 - Supports **hybrid raw-text tool calling** and Json:
-  - `COMMAND: <command>` for simple one-shot shell commands
-  - `SESSION:NAME <command>` for persistent tmux sessions (ideal for msfconsole, long-running shells, etc.)
-  - `JSON_TOOL: <Open AI tool format>`
+  - `<command> command here </command>` for simple one-shot shell commands
+  - `<session name = NAME> command here </session>` for persistent tmux sessions (ideal for msfconsole, long-running shells, etc.)
+  - `<json> <Open AI tool format> </json>`
 - Automatic tmux session creation/reuse
 - Marker-based clean output capture (only returns new command output, not full session history)
 - Safety deny list (blocks dangerous commands before execution)
