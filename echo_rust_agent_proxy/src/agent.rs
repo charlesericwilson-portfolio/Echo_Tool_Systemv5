@@ -9,10 +9,10 @@
 //!   and executing tools until the model produces a final answer.
 //!
 //! Tool detection happens via simple prefix matching on the model's response:
-//! - `JSON_TOOL:`     → structured tool calls (see json.rs)
-//! - `SESSION:`       → persistent tmux session commands (see sessions.rs)
-//! - `END_SESSION:`   → terminate a tmux session
-//! - `command:`       → one-shot command execution (see commands.rs)
+//! - `<json>:`     → structured tool calls (see json.rs)
+//! - `<session>`       → persistent tmux session commands (see sessions.rs)
+//! - `<end_session>`   → terminate a tmux session
+//! - `<command>`       → one-shot command execution (see commands.rs)
 //!
 //! After a tool runs, we append the result (as a "tool" role message) and loop
 //! back to the model. This enables autonomous multi-step tool use.
@@ -53,7 +53,18 @@ pub const RESET_COLOR: &str = "\x1b[0m";
 pub struct EchoAgent {
     pub config: Config,
     pub messages: Vec<Value>,
-    pub db: ToolDatabase,
+    pub db: ToolDatabase,/// Intentionally a no-op by design.
+///
+/// Tmux sessions are kept alive after the chat ends so that:
+/// - Active shells, listeners, or tools persist across crashes/restarts
+/// - The agent can resume a previous engagement by reviewing the tool
+///   database (echo_tools.db) and reconnecting to existing sessions
+///
+/// Sessions are auto-reaped by the background cleanup task after 1 hour
+/// of inactivity (see `start_session_cleanup_task`).
+///
+/// To kill all sessions on exit instead, iterate `active_sessions` here
+/// and call `tmux kill-session -t <name>` for each.
     pub home_dir: PathBuf,
     pub active_sessions: Arc<Mutex<HashMap<String, (String, std::time::Instant)>>>,
     pub stop_generation: Arc<std::sync::atomic::AtomicBool>,
@@ -165,7 +176,8 @@ impl EchoAgent {
 
             println!("{}Echo:\n{}\n{}", LIGHT_BLUE, final_response.trim(), RESET_COLOR);
         }
-
+        // Sessions are intentionally kept alive after exit for engagement continuity.
+        // See clean_up_sessions() for details.
         clean_up_sessions(&self.active_sessions).await?;
         Ok(())
     }

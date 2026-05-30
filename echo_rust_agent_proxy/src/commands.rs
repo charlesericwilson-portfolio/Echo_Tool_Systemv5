@@ -4,8 +4,7 @@ use serde_json::json;
 use crate::safety::is_command_safe;
 
 /// Extracts a command from either:
-/// - Old style: COMMAND: command here
-/// - New style: <COMMAND>multi-line command here</COMMAND>
+/// - New style: <command>multi-line command here</command>
 pub fn extract_command(response_text: &str) -> Option<String> {
     // First try the new tag style (supports multi-line)
     if let Some(start) = response_text.find("<command>") {
@@ -28,12 +27,14 @@ pub async fn handle_command(
     if let Err(e) = is_command_safe(command, &agent.config) {
         println!("{}Safety block: {}{}", crate::agent::YELLOW, e, crate::agent::RESET_COLOR);
         agent.messages.push(json!({"role": "assistant", "content": format!("Safety block: {}", e)}));
-    } else {
-        let output_cmd = tokio::process::Command::new("sh")
-            .arg("-c")
-            .arg(command.trim())
-            .output()
-            .await.expect("Failed to execute command");
+        return Ok(());
+    }
+
+    let output_cmd = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(command.trim())
+        .output()
+        .map_err(|e| anyhow::anyhow!("Failed to execute command '{}': {}", command, e))?;
 
         let stdout = String::from_utf8_lossy(&output_cmd.stdout).to_string();
         let stderr = String::from_utf8_lossy(&output_cmd.stderr).to_string();
@@ -45,7 +46,6 @@ pub async fn handle_command(
 
         // Replace the COMMAND: line with neutral text so it doesn't trigger again
               agent.messages.push(json!({"role": "tool", "content": tool_content}));
-    }
 
     Ok(())
 }

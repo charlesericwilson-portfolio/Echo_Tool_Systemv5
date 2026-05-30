@@ -178,7 +178,18 @@ pub async fn start_session_cleanup_task(
         }
     });
 }
-
+/// Intentionally a no-op by design.
+///
+/// Tmux sessions are kept alive after the chat ends so that:
+/// - Active shells, listeners, or tools persist across crashes/restarts
+/// - The agent can resume a previous engagement by reviewing the tool
+///   database (echo_tools.db) and reconnecting to existing sessions
+///
+/// Sessions are auto-reaped by the background cleanup task after 1 hour
+/// of inactivity (see `start_session_cleanup_task`).
+///
+/// To kill all sessions on exit instead, iterate `active_sessions` here
+/// and call `tmux kill-session -t <name>` for each.
 pub async fn clean_up_sessions(
     _active_sessions: &Arc<Mutex<HashMap<String, (String, std::time::Instant)>>>
 ) -> Result<()> {

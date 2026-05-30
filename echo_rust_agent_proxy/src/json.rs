@@ -3,7 +3,7 @@ use anyhow::Result;
 use chrono::Local;
 use crate::log::save_chat_log_entry;
 
-pub async fn handle_json_tool_call_str(tool_call: &str, web_search_url: Option<&str>) -> Result<String> {
+pub async fn handle_json_tool_call_str(tool_call: &str, web_search_url: Option<&str>, enabled_tools: &[String],) -> Result<String> {
     let parsed: Value = serde_json::from_str(tool_call)
         .map_err(|e| anyhow::anyhow!("Failed to parse JSON tool call: {}", e))?;
 
@@ -20,6 +20,11 @@ pub async fn handle_json_tool_call_str(tool_call: &str, web_search_url: Option<&
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("No tool name found in JSON"))?;
 
+    // Check if tool is enabled in config
+    if !enabled_tools.contains(&tool_name.to_string()) {
+        return Err(anyhow::anyhow!("Tool '{}' is not enabled in config", tool_name));
+    }
+
     let arguments: Value = if function["arguments"].is_string() {
         let args_str = function["arguments"].as_str().unwrap();
         serde_json::from_str(args_str).unwrap_or(Value::Object(serde_json::Map::new()))
@@ -28,7 +33,7 @@ pub async fn handle_json_tool_call_str(tool_call: &str, web_search_url: Option<&
     } else {
         Value::Object(serde_json::Map::new())
     };
-
+    // These are place holders for examples of how to define your json tools the logic works.
     match tool_name {
         "get_current_datetime" => {
             let now = Local::now();
@@ -59,8 +64,9 @@ pub async fn handle_json_tool(
 
     // Pull the web search URL from config so the field is actually used
     let web_search_url = agent.config.web_search.as_ref().map(|w| w.url.as_str());
+    let enabled_tools = &agent.config.json_tools.enabled;
 
-    match handle_json_tool_call_str(json_content, web_search_url).await {
+    match handle_json_tool_call_str(json_content, web_search_url, enabled_tools).await {
         Ok(result) => {
             let tool_content = format!("Tool output:\n{}", result);
             save_chat_log_entry(&agent.home_dir, user_input, &tool_content, "assistant").await?;

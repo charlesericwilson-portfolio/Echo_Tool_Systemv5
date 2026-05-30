@@ -1,8 +1,8 @@
-// log.rs
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
 use anyhow::Result;
+use serde_json::json;
 
 pub async fn save_chat_log_entry(
     log_dir: &PathBuf,
@@ -17,36 +17,30 @@ pub async fn save_chat_log_entry(
     let mut messages = Vec::new();
 
     if !user_message.is_empty() {
-        let escaped = user_message.trim()
-            .replace('\\', "\\\\")
-            .replace('"', "\\\"")
-            .replace('\n', "\\n")
-            .replace('\r', "\\r");
-        messages.push(format!(r#"{{"role": "user", "content": "{}"}}"#, escaped));
+        messages.push(json!({
+            "role": "user",
+            "content": user_message.trim()
+        }));
     }
 
     if !assistant_response.is_empty() {
         let content = if from.contains("SESSION_START") {
-            "=== SESSION START ==="
+            "=== SESSION START ===".to_string()
         } else if from.contains("SESSION_END") {
-            "=== SESSION END ==="
+            "=== SESSION END ===".to_string()
         } else if !from.is_empty() && from != "main" && from != "assistant" && from != "user" {
-            &format!("Session: {}", from)
+            format!("Session: {}", from)
         } else {
-            assistant_response.trim()
+            assistant_response.trim().to_string()
         };
 
-        let escaped = content
-            .replace('\\', "\\\\")
-            .replace('"', "\\\"")
-            .replace('\n', "\\n")
-            .replace('\r', "\\r");
-        messages.push(format!(r#"{{"role": "assistant", "content": "{}"}}"#, escaped));
+        messages.push(json!({
+            "role": "assistant",
+            "content": content
+        }));
     }
 
-    let messages_str = messages.join(",");
-
-    let log_line = format!(r#"{{"messages": [{}]}}"#, messages_str);
+    let log_line = json!({ "messages": messages }).to_string();
 
     let mut file = OpenOptions::new()
         .append(true)

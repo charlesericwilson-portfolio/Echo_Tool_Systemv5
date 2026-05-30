@@ -23,6 +23,12 @@ pub struct WebSearchConfig {
     pub api_key: Option<String>,
 }
 
+#[derive(Debug, Deserialize, Default, Clone)]
+pub struct JsonToolsConfig {
+    #[serde(default)]
+    pub enabled: Vec<String>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct SummarizerConfig {
     pub url: String,
@@ -54,6 +60,8 @@ pub struct Config {
     pub context: ContextConfig,
     pub paths: PathsConfig,
     pub web_search: Option<WebSearchConfig>,
+    #[serde(default)]
+    pub json_tools: JsonToolsConfig,
 }
 
 pub fn load_config(path: &str) -> Result<Config, Box<dyn std::error::Error>> {
