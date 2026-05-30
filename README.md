@@ -7,7 +7,7 @@ It is a continuation of the earlier [Echo tmux agentv3](https://github.com/charl
 Key idea: If your model can already tell you what commands to type and doesn't use a jinja template, it can use tools through this framework. No special fine-tuning is required.
 
 The raw text methods are ready to use out of the box.
-JSON tool support is also available, though defining tools requires some setup.
+JSON tool support is also available, we have a reliable web search using duck duck go and we have a browse page function that reads the pages found in the search results. The way for the model to use them has been added to the sample system prompt included in the repo.
 A basic system prompt is included to teach the model the tool format, but you can replace it with your own.
 
 Current version: Rust v5 (previous Python proxy version was v4)
@@ -82,8 +82,8 @@ OR
 
 - **Stable**: `<command></command>` raw text tool execution
 - **Functional**: Persistent `<session name = NAME></session>` tool execution via tmux with smart output capture and tool output cleaning
-- **Stable** multi-line command and file writing support with xml tags <COMMAND>command here</COMMAND>. You can change the flag name in the code before compile right now but will eventually be going into config.toml
-- **New (In Progress)**: JSON tool calling is functional I have left stubs in the code so you can define your own tools according to your needs.
+- **Stable** multi-line command and file writing support with xml tags <command>command here</command>. You can change the flag name in the code before compile right now but will eventually be going into config.toml
+- **JSON function calling** is functional I have included a web search tool and a browse page tool to read the results and you can define your own tools according to your needs.
 - Refactored to use config.toml to set endpoints and set your system prompts in text files for the main model and the summarizer model without recompiling.
 - Context auto-summarization 
 - SQLite database logging for all tool calls and summaries
@@ -103,7 +103,6 @@ The agent can fluidly switch between raw text commands, persistent tmux sessions
 ## Roadmap
 
 - TOML config file for endpoints, system prompt, and tool definitions (no recompilation needed) still adding features to the TOML.
-- More built-in tools (web search, document generation, database queries, etc.)
 - Cleaner terminal UI
 - Better multi-model support (easy switching between local and cloud models)
   
@@ -123,7 +122,7 @@ The agent can fluidly switch between raw text commands, persistent tmux sessions
 - Interrupt generation using ctl+\ end session using ctl+c.
 
 ### Special considerations
-I changed the tokenizer chat template to accept user, assistant, system, and tool message types.
+I changed the tokenizer chat template on my local model to accept user, assistant, system, and tool message types.
 The Problem with Standard Tool Result Handling
 Most OpenAI-compatible chat templates only define three message roles: system, user, and assistant. When an agent framework needs to return tool output back to the model, the only available slot is user — so tool results get injected as if the human typed them.
 This creates a fundamental semantic mismatch. The model was trained to treat user messages as new instructions requiring a response. So when it sees tool output injected as a user message, it reasons: a user gave me new information, I should act on it — and calls another tool. Which produces more output. Which gets injected as another user message. Which triggers another tool call. The loop never resolves because nothing in the token stream signals "this task is complete."
